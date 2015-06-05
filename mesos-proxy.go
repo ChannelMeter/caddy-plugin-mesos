@@ -1,16 +1,20 @@
-//
 package mesosproxy
 
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/mesos/mesos-go/mesosproto"
 	"github.com/mholt/caddy/config/setup"
 	"github.com/mholt/caddy/middleware"
 	"github.com/mholt/caddy/middleware/proxy"
+	"github.com/samuel/go-zookeeper/zk"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -260,12 +264,75 @@ func (u *mesosUpstream) sync() {
 	}()
 	var state mesosState
 	// TODO: Use upstream.mesosMaster
-	if resp, err := http.Get("http://mesos:5050/state.json"); err == nil {
-		defer resp.Body.Close()
-		if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
+
+	var masterHosts []string
+
+	if path, err := url.Parse(u.mesosMaster); err == nil {
+		switch path.Scheme {
+		case "zk":
+			if path.Path == "" || path.Path == "/" {
+				log.Printf("[ERROR] no path specified for mesos zk lookup \"%s\"", u.mesosMaster)
+				return
+			}
+			zookeeperPath := path.Path
+			if zookeeperPath[0] != '/' {
+				zookeeperPath = "/" + zookeeperPath
+			}
+			if zoo, _, err := zk.Connect(strings.Split(path.Host, ","), 10*time.Second); err == nil {
+				defer zoo.Close()
+				if children, _, err := zoo.Children(zookeeperPath); err == nil {
+					sort.Strings(children)
+					for _, child := range children {
+						if strings.HasPrefix(child, "info_") {
+							if data, _, err := zoo.Get(zookeeperPath + "/" + child); err == nil {
+								masterInfo := new(mesosproto.MasterInfo)
+								if err := masterInfo.Unmarshal(data); err == nil {
+									masterHosts = []string{fmt.Sprintf("%s:%d", masterInfo.GetHostname(), masterInfo.GetPort())}
+								} else {
+									log.Printf("[ERROR] parsing mesos master from zookeeper. \"%s\"", err.Error())
+									return
+								}
+							} else {
+								log.Printf("[ERROR] getting mesos master from zookeeper. \"%s\"", err.Error())
+								return
+							}
+						}
+					}
+				} else {
+					log.Printf("[ERROR] getting mesos masters from zookeeper. \"%s\"", err.Error())
+					return
+				}
+			}
+		case "http", "https":
+			masterHosts = strings.Split(path.Host, ",")
+		default:
+			log.Printf("[ERROR] unknown scheme in parsing mesos master url \"%s\"", u.mesosMaster)
 			return
 		}
 	} else {
+		masterHosts = strings.Split(u.mesosMaster, ",")
+	}
+
+	if len(masterHosts) == 0 {
+		log.Printf("[ERROR] No reachable masters.")
+		return
+	}
+	var masterErr error
+	for _, host := range masterHosts {
+		if resp, err := http.Get("http://" + host + "/state.json"); err == nil {
+			defer resp.Body.Close()
+			if err := json.NewDecoder(resp.Body).Decode(&state); err == nil {
+				masterErr = nil
+				break
+			} else {
+				masterErr = err
+			}
+		} else {
+			masterErr = err
+		}
+	}
+	if masterErr != nil {
+		log.Printf("[ERROR] Failed to reach masters. \"%s\"", masterErr.Error())
 		return
 	}
 
