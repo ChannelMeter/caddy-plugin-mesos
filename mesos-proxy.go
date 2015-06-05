@@ -98,7 +98,7 @@ func newMesosUpstreams(c *setup.Controller) ([]proxy.Upstream, error) {
 			FailTimeout: 10 * time.Second,
 			MaxFails:    1,
 
-			SyncInterval: 10 * time.Second,
+			SyncInterval: 120 * time.Second,
 			Scheme:       "http",
 		}
 		upstream.hosts.Store(proxy.HostPool([]*proxy.UpstreamHost{}))
