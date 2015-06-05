@@ -288,6 +288,7 @@ func (u *mesosUpstream) sync() {
 								masterInfo := new(mesosproto.MasterInfo)
 								if err := masterInfo.Unmarshal(data); err == nil {
 									masterHosts = []string{fmt.Sprintf("%s:%d", masterInfo.GetHostname(), masterInfo.GetPort())}
+									break
 								} else {
 									log.Printf("[ERROR] parsing mesos master from zookeeper. \"%s\"", err.Error())
 									return
