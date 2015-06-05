@@ -337,6 +337,11 @@ func (u *mesosUpstream) sync() {
 		return
 	}
 
+	if len(state.Frameworks) == 0 {
+		log.Println("[WARNING] No frameworks found running.")
+		return
+	}
+
 	hosts := make(proxy.HostPool, 0, 4)
 	for _, framework := range state.Frameworks {
 		if framework.Name == u.framework {
