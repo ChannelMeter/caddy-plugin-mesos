@@ -420,7 +420,7 @@ func (u *mesosUpstream) sync() {
 	for _, host := range hosts {
 		if host.ReverseProxy == nil {
 			if baseUrl, err := url.Parse(host.Name); err == nil {
-				host.ReverseProxy = proxy.NewSingleHostReverseProxy(baseUrl)
+				host.ReverseProxy = proxy.NewSingleHostReverseProxy(baseUrl, "")
 			} else {
 				return
 			}
