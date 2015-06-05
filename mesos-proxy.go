@@ -263,8 +263,6 @@ func (u *mesosUpstream) sync() {
 		u.lastSync = time.Now()
 	}()
 	var state mesosState
-	// TODO: Use upstream.mesosMaster
-
 	var masterHosts []string
 
 	if path, err := url.Parse(u.mesosMaster); err == nil {
