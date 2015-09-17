@@ -250,13 +250,14 @@ func (u *mesosUpstream) syncWorker(stop chan struct{}) {
 
 func (u *mesosUpstream) sync() {
 	var syncing int32
+	u.syncWg.Add(1)
 	syncing = atomic.AddInt32(&u.syncing, 1)
 	if syncing > 1 {
 		atomic.AddInt32(&u.syncing, -1)
+		u.syncWg.Done()
 		u.syncWg.Wait()
 		return
 	}
-	u.syncWg.Add(1)
 	defer func() {
 		u.syncWg.Done()
 		atomic.AddInt32(&u.syncing, -1)
@@ -405,6 +406,9 @@ func (u *mesosUpstream) sync() {
 		}
 	}
 	oldPool := u.Hosts()
+	if len(hosts) == 0 && len(oldPool) > 0 {
+		return
+	}
 	isSame := len(oldPool) == len(hosts)
 	for i, host := range hosts {
 		found := false
