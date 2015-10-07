@@ -39,10 +39,11 @@ type mesosUpstream struct {
 		Interval time.Duration
 	}
 
-	SyncInterval time.Duration
-	lastSync     time.Time
-	syncing      int32
-	syncWg       sync.WaitGroup
+	SyncInterval  time.Duration
+	flushInterval time.Duration
+	lastSync      time.Time
+	syncing       int32
+	syncWg        sync.WaitGroup
 
 	Scheme string
 	Port   int
@@ -187,6 +188,15 @@ func newMesosUpstreams(c *setup.Controller) ([]proxy.Upstream, error) {
 					return upstreams, c.ArgErr()
 				}
 				upstream.Scheme = c.Val()
+			case "flush_interval":
+				if !c.NextArg() {
+					return upstreams, c.ArgErr()
+				}
+				if dur, err := time.ParseDuration(c.Val()); err == nil {
+					upstream.flushInterval = dur
+				} else {
+					return upstreams, err
+				}
 			}
 		}
 		upstream.proxyHeaders = proxyHeaders
@@ -428,6 +438,7 @@ func (u *mesosUpstream) sync() {
 		if host.ReverseProxy == nil {
 			if baseUrl, err := url.Parse(host.Name); err == nil {
 				host.ReverseProxy = proxy.NewSingleHostReverseProxy(baseUrl, "")
+				host.ReverseProxy.FlushInterval = u.flushInterval
 			} else {
 				return
 			}
