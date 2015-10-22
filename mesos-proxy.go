@@ -458,31 +458,36 @@ func (u *mesosUpstream) From() string {
 }
 
 func (u *mesosUpstream) Select() *proxy.UpstreamHost {
-	pool := u.Hosts()
-	if len(pool) == 0 {
-		u.sync()
-		pool = u.Hosts()
-	}
-	if len(pool) == 1 {
-		if pool[0].Down() {
-			return nil
+	for i := 0; i < 2; i++ {
+		pool := u.Hosts()
+		if len(pool) == 0 {
+			u.sync()
+			pool = u.Hosts()
 		}
-		return pool[0]
-	}
-	allDown := true
-	for _, host := range pool {
-		if !host.Down() {
-			allDown = false
-			break
+		if len(pool) == 1 {
+			if pool[0].Down() {
+				u.sync()
+				continue
+			}
+			return pool[0]
 		}
-	}
-	if allDown {
-		return nil
-	}
+		allDown := true
+		for _, host := range pool {
+			if !host.Down() {
+				allDown = false
+				break
+			}
+		}
+		if allDown {
+			u.sync()
+			continue
+		}
 
-	if u.Policy == nil {
-		return (&proxy.Random{}).Select(pool)
-	} else {
-		return u.Policy.Select(pool)
+		if u.Policy == nil {
+			return (&proxy.Random{}).Select(pool)
+		} else {
+			return u.Policy.Select(pool)
+		}
 	}
+	return nil
 }
